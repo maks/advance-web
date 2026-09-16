@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>picoTracker Advance</title>
+  <script src="./coi-serviceworker.js"></script>
+  <script>
+    window.__logs = [];
+    window.__errors = [];
+    const origLog = console.log;
+    const origErr = console.error;
+    const origWarn = console.warn;
+    console.log = (...args) => { window.__logs.push(['log', args.join(' ')]); origLog(...args); };
+    console.warn = (...args) => { window.__logs.push(['warn', args.join(' ')]); origWarn(...args); };
+    console.error = (...args) => { window.__logs.push(['err', args.join(' ')]); origErr(...args); };
+    window.addEventListener('error', (e) => window.__errors.push(e.message || String(e)));
+    window.addEventListener('unhandledrejection', (e) => window.__errors.push(String(e.reason?.message || e.reason)));
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0f1015;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+    .canvas-container {
+      position: relative;
+      background: #000;
+      border: 2px solid #282a36;
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      width: 720px;
+      height: 720px;
+    }
+    #picotracker-canvas {
+      width: 720px;
+      height: 720px;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #toolbar {
+      margin-top: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      width: 720px;
+      justify-content: space-between;
+    }
+    #status-bar {
+      padding: 8px 16px;
+      background: #181a20;
+      border-radius: 4px;
+      border: 1px solid #282a36;
+      font-size: 13px;
+      color: #8be9fd;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-grow: 1;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ffb86c;
+    }
+    .status-dot.ready {
+      background: #50fa7b;
+    }
+    .status-dot.error {
+      background: #ff5555;
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      background: #282a36;
+      color: #f8f8f2;
+      border: 1px solid #44475a;
+      border-radius: 4px;
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s ease;
+    }
+    .btn:hover {
+      background: #44475a;
+    }
+    .btn:active {
+      background: #6272a4;
+    }
+    .btn.active {
+      border-color: #50fa7b;
+      color: #50fa7b;
+    }
+    .btn.error {
+      border-color: #ff5555;
+      color: #ff5555;
+    }
+    .modal-status {
+      font-size: 12px;
+      color: #6272a4;
+    }
+    .modal-status.error {
+      color: #ff5555;
+    }
+    .storage-tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: #282a36;
+      border: 1px solid #44475a;
+      color: #50fa7b;
+      font-family: monospace;
+      margin-left: auto;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .storage-tag.saving {
+      color: #ffb86c;
+      border-color: #ffb86c;
+    }
+    .storage-tag.error {
+      color: #ff5555;
+      border-color: #ff5555;
+    }
+    /* Modal Dialog */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(2px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-dialog {
+      background: #181a20;
+      border: 1px solid #44475a;
+      border-radius: 6px;
+      width: 620px;
+      max-width: 90vw;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+      color: #f8f8f2;
+    }
+    .modal-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid #282a36;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #6272a4;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+    .modal-close:hover {
+      color: #ff5555;
+    }
+    .modal-tabs {
+      display: flex;
+      border-bottom: 1px solid #282a36;
+      background: #14161b;
+    }
+    .modal-tab {
+      padding: 10px 18px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #6272a4;
+      border-bottom: 2px solid transparent;
+      user-select: none;
+    }
+    .modal-tab:hover {
+      color: #f8f8f2;
+    }
+    .modal-tab.active {
+      color: #50fa7b;
+      border-bottom-color: #50fa7b;
+      background: #181a20;
+    }
+    .modal-body {
+      padding: 16px 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #282a36;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #14161b;
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+    }
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .file-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #20222a;
+      border: 1px solid #282a36;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .file-info {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .file-name {
+      font-family: monospace;
+      color: #8be9fd;
+    }
+    .file-meta {
+      font-size: 11px;
+      color: #6272a4;
+    }
+    .file-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .empty-message {
+      padding: 24px;
+      text-align: center;
+      color: #6272a4;
+      font-size: 13px;
+    }
+    /* Tab Lock Overlay */
+    #tab-lock-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 16, 21, 0.95);
+      z-index: 2000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    #tab-lock-overlay.open {
+      display: flex;
+    }
+    #tab-lock-overlay h2 {
+      color: #ffb86c;
+      margin-bottom: 12px;
+    }
+    #tab-lock-overlay p {
+      max-width: 480px;
+      color: #a0a0a0;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    #key-guide {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #181a20;
+      border-radius: 4px;
+      border: 1px solid #282a36;
+      font-size: 12px;
+      color: #a0a0a0;
+      width: 720px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+    }
+    .key-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .key-badge {
+      background: #282a36;
+      border: 1px solid #44475a;
+      border-radius: 3px;
+      padding: 2px 6px;
+      color: #f1fa8c;
+      font-family: monospace;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <h1>picoTracker Advance</h1>
+  <div class="canvas-container">
+    <canvas id="picotracker-canvas" width="720" height="720"></canvas>
+  </div>
+  <div id="toolbar">
+    <div id="status-bar">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text">Initializing web workbench...</span>
+      <span id="storage-status" class="storage-tag">Saved</span>
+    </div>
+    <div class="btn-group">
+      <button id="btn-audio" class="btn">Enable Audio</button>
+      <button id="btn-files" class="btn">Files</button>
+      <button id="btn-stop" class="btn">Stop</button>
+      <button id="btn-restart" class="btn">Restart</button>
+    </div>
+  </div>
+  <div id="key-guide">
+    <div class="key-item"><span class="key-badge">Arrows</span> / <span class="key-badge">WASD</span> Move</div>
+    <div class="key-item"><span class="key-badge">X</span> Edit</div>
+    <div class="key-item"><span class="key-badge">/</span> or <span class="key-badge">L</span> Nav</div>
+    <div class="key-item"><span class="key-badge">Enter</span> or <span class="key-badge">K</span> Enter</div>
+    <div class="key-item"><span class="key-badge">Space</span> or <span class="key-badge">C</span> Play</div>
+    <div class="key-item"><span class="key-badge">V</span> Select</div>
+    <div class="key-item"><span class="key-badge">Z</span> Alt</div>
+  </div>
+
+  <!-- File Manager Modal -->
+  <div id="files-modal" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2>File Manager</h2>
+        <button id="modal-close-btn" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-tabs">
+        <div class="modal-tab active" data-tab="projects">Projects</div>
+        <div class="modal-tab" data-tab="renders">Audio Renders</div>
+        <div class="modal-tab" data-tab="backup">Backup &amp; Restore</div>
+      </div>
+      <div class="modal-body">
+        <!-- Projects Tab -->
+        <div id="tab-content-projects" class="tab-content">
+          <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
+            <span style="font-size:12px; color:#a0a0a0;">Projects in storage (/data/projects)</span>
+            <div>
+              <button id="btn-import-project" class="btn btn-sm">Import .zip</button>
+              <input type="file" id="input-import-project" accept=".zip" style="display:none;">
+            </div>
+          </div>
+          <div id="project-list" class="file-list">
+            <div class="empty-message">No projects found.</div>
+          </div>
+        </div>
+
+        <!-- Renders Tab -->
+        <div id="tab-content-renders" class="tab-content" style="display:none;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
+            <span style="font-size:12px; color:#a0a0a0;">WAV renders (/data/renders)</span>
+            <button id="btn-refresh-renders" class="btn btn-sm">Refresh</button>
+          </div>
+          <div id="render-list" class="file-list">
+            <div class="empty-message">No rendered audio files.</div>
+          </div>
+        </div>
+
+        <!-- Backup Tab -->
+        <div id="tab-content-backup" class="tab-content" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <h3 style="font-size:14px; margin-top:0; color:#50fa7b;">Full Workspace Backup</h3>
+            <p style="font-size:12px; color:#a0a0a0; line-height:1.4;">
+              Export all projects, samples, instruments, and settings into a single .zip file.
+            </p>
+            <button id="btn-export-backup" class="btn btn-sm">Download Full Backup (.zip)</button>
+          </div>
+          <hr style="border:0; border-top:1px solid #282a36; margin:16px 0;">
+          <div>
+            <h3 style="font-size:14px; margin-top:0; color:#ffb86c;">Restore Workspace</h3>
+            <p style="font-size:12px; color:#a0a0a0; line-height:1.4;">
+              Restore data from a previously downloaded .zip backup. Existing files with the same name will be overwritten.
+            </p>
+            <button id="btn-restore-backup" class="btn btn-sm">Restore from .zip</button>
+            <input type="file" id="input-restore-backup" accept=".zip" style="display:none;">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span id="modal-status" class="modal-status"></span>
+        <button id="btn-modal-done" class="btn btn-sm">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Tab Lock Warning Overlay -->
+  <div id="tab-lock-overlay">
+    <h2>Another Tab is Active</h2>
+    <p>picoTracker storage is active in another tab or window. To prevent data corruption, only one tab can access storage at a time.</p>
+    <button id="btn-lock-retry" class="btn">Retry Access</button>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
