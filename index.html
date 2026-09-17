@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>picoTracker Advance</title>
   <script src="./coi-serviceworker.js"></script>
   <script>
@@ -325,12 +325,138 @@
       font-family: monospace;
       font-size: 11px;
     }
+    #mobile-controls {
+      display: none;
+    }
+    .mobile-controls-enabled {
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      overscroll-behavior: none;
+    }
+    .mobile-controls-enabled h1 {
+      margin-bottom: 10px;
+    }
+    .mobile-controls-enabled .canvas-container,
+    .mobile-controls-enabled #picotracker-canvas,
+    .mobile-controls-enabled #toolbar,
+    .mobile-controls-enabled #key-guide {
+      width: min(720px, calc(100vw - 24px));
+    }
+    .mobile-controls-enabled .canvas-container,
+    .mobile-controls-enabled #picotracker-canvas {
+      height: auto;
+      aspect-ratio: 1;
+    }
+    .mobile-controls-enabled #mobile-controls {
+      display: flex;
+      width: min(720px, calc(100vw - 24px));
+      margin-top: 18px;
+      align-items: center;
+      justify-content: space-around;
+      gap: 18px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .touch-dpad {
+      display: grid;
+      grid-template-columns: repeat(3, clamp(44px, 14vw, 72px));
+      grid-template-rows: repeat(3, clamp(44px, 14vw, 72px));
+      gap: 4px;
+    }
+    .touch-actions {
+      display: grid;
+      grid-template-columns: repeat(2, clamp(58px, 18vw, 92px));
+      gap: 10px;
+    }
+    .touch-button {
+      min-width: 0;
+      min-height: 52px;
+      margin: 0;
+      padding: 0 8px;
+      border: 1px solid #555867;
+      border-radius: 9px;
+      background: linear-gradient(#22242c, #16171d);
+      box-shadow: inset 0 0 0 2px #0d0e12, 0 3px 6px rgba(0, 0, 0, 0.45);
+      color: #f8f8f2;
+      font: 600 11px/1 inherit;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .touch-dpad .touch-button {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      font-size: 18px;
+    }
+    .touch-up {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .touch-left {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .touch-right {
+      grid-column: 3;
+      grid-row: 2;
+    }
+    .touch-down {
+      grid-column: 2;
+      grid-row: 3;
+    }
+    .touch-button.is-pressed {
+      color: #8be9fd;
+      border-color: #8be9fd;
+      background: #343746;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.75);
+      transform: translateY(1px);
+    }
+    @media (max-width: 600px) {
+      .mobile-controls-enabled {
+        padding-top: 10px;
+      }
+      .mobile-controls-enabled #toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .mobile-controls-enabled .btn-group {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .mobile-controls-enabled .btn {
+        padding: 8px 4px;
+        font-size: 11px;
+      }
+      .mobile-controls-enabled #key-guide {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
   <h1>picoTracker Advance</h1>
   <div class="canvas-container">
     <canvas id="picotracker-canvas" width="720" height="720"></canvas>
+  </div>
+  <div id="mobile-controls" aria-label="Tracker controls">
+    <div class="touch-dpad" aria-label="Direction controls">
+      <button type="button" class="touch-button touch-up" data-action="up" aria-label="Up">&#9650;</button>
+      <button type="button" class="touch-button touch-left" data-action="left" aria-label="Left">&#9664;</button>
+      <button type="button" class="touch-button touch-right" data-action="right" aria-label="Right">&#9654;</button>
+      <button type="button" class="touch-button touch-down" data-action="down" aria-label="Down">&#9660;</button>
+    </div>
+    <div class="touch-actions" aria-label="Action controls">
+      <button type="button" class="touch-button" data-action="edit">Edit</button>
+      <button type="button" class="touch-button" data-action="enter">Enter</button>
+      <button type="button" class="touch-button" data-action="play">Play</button>
+      <button type="button" class="touch-button" data-action="nav">Nav</button>
+      <button type="button" class="touch-button" data-action="alt">Alt</button>
+      <button type="button" class="touch-button" data-action="select">Select</button>
+    </div>
   </div>
   <div id="toolbar">
     <div id="status-bar">

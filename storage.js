@@ -188,6 +188,87 @@ export class StorageCoordinator {
   }
 
   /**
+   * Installs an embedded project into a new browser storage database and makes
+   * it the current project. Existing storage is never modified by this seed.
+   * @param {string} projectName
+   * @param {string} sourceDir
+   * @returns {boolean} True when the project was installed
+   */
+  seedDefaultProject(projectName, sourceDir) {
+    if (!this.fs) return false;
+
+    const projectsPath = '/data/projects';
+    const currentProjectPath = '/data/.current';
+    const projectDir = `${projectsPath}/${projectName}`;
+
+    try {
+      // Never overwrite if the project already exists
+      if (this.fs.analyzePath(projectDir).exists) {
+        return false;
+      }
+
+      // Check current project marker: if it points to a real user project, preserve it
+      if (this.fs.analyzePath(currentProjectPath).exists) {
+        try {
+          const currentName = this.fs.readFile(currentProjectPath, { encoding: 'utf8' }).trim();
+          if (currentName !== '' && currentName !== '.untitled' && currentName !== projectName) {
+            return false;
+          }
+        } catch (_) {}
+      }
+
+      // Check existing projects: only seed if no projects or only placeholder .untitled exists
+      if (this.fs.analyzePath(projectsPath).exists) {
+        const existingProjects = this.fs.readdir(projectsPath)
+          .filter((name) => name !== '.' && name !== '..');
+        const userProjects = existingProjects.filter((name) => name !== '.untitled');
+        if (userProjects.length > 0) {
+          return false;
+        }
+      }
+
+      if (!this.fs.analyzePath(`${sourceDir}/ptsav.dat`).exists) {
+        throw new Error(`Default project is missing ${sourceDir}/ptsav.dat`);
+      }
+
+      // If .untitled exists as the only placeholder project, remove it so default project replaces it
+      const untitledPath = `${projectsPath}/.untitled`;
+      if (this.fs.analyzePath(untitledPath).exists) {
+        try {
+          this._removeDirectoryRecursive(untitledPath);
+        } catch (err) {
+          console.warn('[storage] Failed to clean up .untitled:', err);
+        }
+      }
+
+      const sourceFiles = this._readDirectoryRecursive(sourceDir);
+      this._ensureDir(projectDir);
+      for (const sourceFile of sourceFiles) {
+        const relativePath = sourceFile.slice(sourceDir.length + 1);
+        const destination = `${projectDir}/${relativePath}`;
+        const destinationParent = destination.substring(0, destination.lastIndexOf('/'));
+        this._ensureDir(destinationParent);
+        const data = this.fs.readFile(sourceFile, { encoding: 'binary' });
+        this.fs.writeFile(destination, data);
+      }
+      this.fs.writeFile(currentProjectPath, projectName);
+      this.notifyMutation();
+      return true;
+    } catch (e) {
+      console.error('[storage] Failed to install default project:', e);
+      try {
+        if (this.fs.analyzePath(currentProjectPath).exists) {
+          this.fs.unlink(currentProjectPath);
+        }
+        if (this.fs.analyzePath(projectDir).exists) {
+          this._removeDirectoryRecursive(projectDir);
+        }
+      } catch (_) {}
+      return false;
+    }
+  }
+
+  /**
    * Scans /data/projects, flattens nested project directories created by earlier
    * import flaws, cleans out OS metadata junk, and enforces the 16-character limit.
    * @returns {boolean} True if any repairs were made

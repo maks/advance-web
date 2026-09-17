@@ -52,6 +52,88 @@ function isEditableTarget(event) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
 }
 
+export function isMobileTouchBrowser({
+  navigator = globalThis.navigator,
+  window = globalThis.window,
+} = {}) {
+  const userAgent = navigator?.userAgent ?? '';
+  const isIos = /iPad|iPhone|iPod/i.test(userAgent) ||
+    (navigator?.platform === 'MacIntel' && navigator?.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(userAgent);
+  const reportsMobile = navigator?.userAgentData?.mobile === true;
+  const hasTouch = (navigator?.maxTouchPoints ?? 0) > 0 ||
+    (window != null && 'ontouchstart' in window);
+  return hasTouch && (isIos || isAndroid || reportsMobile);
+}
+
+export function attachTouchControls(root, inputManager, options = {}) {
+  if (!root || !inputManager) return () => {};
+
+  const buttons = [...root.querySelectorAll('[data-action]')];
+  const activePointers = new Map();
+  let firstInteraction = true;
+
+  function releasePointer(pointerId) {
+    const active = activePointers.get(pointerId);
+    if (!active) return;
+    activePointers.delete(pointerId);
+    inputManager.release(active.action, active.source);
+    if (![...activePointers.values()].some(({ button }) => button === active.button)) {
+      active.button.classList.remove('is-pressed');
+    }
+  }
+
+  function onPointerDown(event) {
+    if (event.button !== undefined && event.button !== 0) return;
+    const button = event.currentTarget;
+    const action = button.dataset.action;
+    if (!Object.hasOwn(ACTIONS, action)) return;
+
+    event.preventDefault();
+    if (firstInteraction) {
+      firstInteraction = false;
+      options.onFirstInteraction?.();
+    }
+    releasePointer(event.pointerId);
+    const source = `touch:${event.pointerId}`;
+    activePointers.set(event.pointerId, { action, button, source });
+    button.classList.add('is-pressed');
+    button.setPointerCapture?.(event.pointerId);
+    inputManager.press(action, source);
+  }
+
+  function onPointerEnd(event) {
+    event.preventDefault();
+    releasePointer(event.pointerId);
+  }
+
+  function preventContextMenu(event) {
+    event.preventDefault();
+  }
+
+  for (const button of buttons) {
+    button.addEventListener('pointerdown', onPointerDown);
+    button.addEventListener('pointerup', onPointerEnd);
+    button.addEventListener('pointercancel', onPointerEnd);
+    button.addEventListener('lostpointercapture', onPointerEnd);
+    button.addEventListener('contextmenu', preventContextMenu);
+  }
+
+  return () => {
+    for (const pointerId of [...activePointers.keys()]) {
+      releasePointer(pointerId);
+    }
+    for (const button of buttons) {
+      button.removeEventListener('pointerdown', onPointerDown);
+      button.removeEventListener('pointerup', onPointerEnd);
+      button.removeEventListener('pointercancel', onPointerEnd);
+      button.removeEventListener('lostpointercapture', onPointerEnd);
+      button.removeEventListener('contextmenu', preventContextMenu);
+      button.classList.remove('is-pressed');
+    }
+  };
+}
+
 export function createInputBridge(module) {
   const setAction = module?._PicoTracker_Wasm_SetAction;
   const repeatAction = module?._PicoTracker_Wasm_RepeatAction;

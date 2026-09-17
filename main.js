@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import createPicoTrackerModule from './wasm/picotracker.js';
-import { createInputManager } from './input.js';
+import {
+  attachTouchControls,
+  createInputManager,
+  isMobileTouchBrowser,
+} from './input.js';
 import { storage } from './storage.js';
 
 const statusText = document.getElementById('status-text');
@@ -16,9 +20,14 @@ const filesModal = document.getElementById('files-modal');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 const btnModalDone = document.getElementById('btn-modal-done');
 const btnLockRetry = document.getElementById('btn-lock-retry');
+const mobileControls = document.getElementById('mobile-controls');
 
 let currentModule = null;
 let currentInputManager = null;
+let detachTouchControls = null;
+
+const mobileTouchEnabled = isMobileTouchBrowser();
+document.body.classList.toggle('mobile-controls-enabled', mobileTouchEnabled);
 
 function updateStatus(text, state = 'pending') {
   if (statusText) statusText.textContent = text;
@@ -26,6 +35,16 @@ function updateStatus(text, state = 'pending') {
     statusDot.className = 'status-dot' + (state === 'ready' ? ' ready' : state === 'error' ? ' error' : '');
   }
   console.log(`[picoTracker] [${state}] ${text}`);
+}
+
+function getWasmEnvironmentError() {
+  const secure = globalThis.isSecureContext === true;
+  const isolated = globalThis.crossOriginIsolated === true;
+  const hasSharedMemory = typeof globalThis.SharedArrayBuffer === 'function';
+  if (secure && isolated && hasSharedMemory) return null;
+
+  return 'Browser cannot start shared-memory WebAssembly ' +
+    `(secure=${secure}, isolated=${isolated}, SharedArrayBuffer=${hasSharedMemory})`;
 }
 
 function updateAudioUi() {
@@ -82,6 +101,10 @@ function unlockAudio() {
 }
 
 async function shutdown() {
+  if (detachTouchControls) {
+    detachTouchControls();
+    detachTouchControls = null;
+  }
   if (currentInputManager) {
     currentInputManager.detach();
     currentInputManager = null;
@@ -416,6 +439,12 @@ window.__picoTrackerStorage = storage;
 
 async function boot() {
   try {
+    const environmentError = getWasmEnvironmentError();
+    if (environmentError) {
+      updateStatus(environmentError, 'error');
+      return;
+    }
+
     updateStatus('Acquiring storage lock...', 'pending');
     const hasLock = await storage.acquireLock();
     if (!hasLock) {
@@ -447,7 +476,9 @@ async function boot() {
         }
         mod.addRunDependency('idbfs-populate');
         mod.FS.syncfs(true, (err) => {
-          if (err) console.warn('IDBFS initial sync error:', err);
+          if (err) {
+            console.warn('IDBFS initial sync error:', err);
+          }
           storage.init(mod.FS);
           mod.removeRunDependency('idbfs-populate');
         });
@@ -457,6 +488,18 @@ async function boot() {
       }],
       onRuntimeInitialized: function () {
         console.log('[picoTracker] Runtime initialized');
+        try {
+          if (storage.seedDefaultProject('oneCycAc', '/defaults/oneCycAc')) {
+            updateStatus('Installing default project...', 'pending');
+            storage.flush().then((ok) => {
+              if (!ok) {
+                console.warn('Failed to persist the default project');
+              }
+            });
+          }
+        } catch (e) {
+          console.error('[storage] Failed to install default project:', e);
+        }
         if (typeof this._PicoTracker_Wasm_BootstrapAudio === 'function') {
           this._PicoTracker_Wasm_BootstrapAudio();
         }
@@ -474,12 +517,19 @@ async function boot() {
         if (state === 1) { // Ready
           window.__picoTrackerReady = true;
 
-          // Initialize and attach keyboard input manager
+          // Initialize keyboard input and optional mobile touch controls.
           if (currentInputManager) {
             currentInputManager.detach();
           }
           currentInputManager = createInputManager(module);
           currentInputManager.attach();
+          if (mobileTouchEnabled) {
+            detachTouchControls = attachTouchControls(
+              mobileControls,
+              currentInputManager,
+              { onFirstInteraction: unlockAudio }
+            );
+          }
           window.__picoTrackerInput = currentInputManager;
 
           updateStatus('Ready - Advance tracker running', 'ready');
