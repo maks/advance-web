@@ -345,8 +345,9 @@
     }
     .mobile-controls-enabled .canvas-container,
     .mobile-controls-enabled #picotracker-canvas {
-      height: auto;
-      aspect-ratio: 1;
+      /* Keep the canvas square without relying on Safari to combine an
+         intrinsic canvas height with aspect-ratio and height: auto. */
+      height: min(720px, calc(100vw - 24px));
     }
     .mobile-controls-enabled #mobile-controls {
       display: flex;
