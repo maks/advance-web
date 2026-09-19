@@ -12,9 +12,10 @@ const statusText = document.getElementById('status-text');
 const statusDot = document.getElementById('status-dot');
 const storageStatus = document.getElementById('storage-status');
 const canvas = document.getElementById('picotracker-canvas');
+const menuToggle = document.getElementById('menu-toggle');
+const menuPanel = document.getElementById('menu-panel');
 const btnStop = document.getElementById('btn-stop');
 const btnRestart = document.getElementById('btn-restart');
-const btnAudio = document.getElementById('btn-audio');
 const btnFiles = document.getElementById('btn-files');
 const filesModal = document.getElementById('files-modal');
 const modalCloseBtn = document.getElementById('modal-close-btn');
@@ -25,6 +26,7 @@ const mobileControls = document.getElementById('mobile-controls');
 let currentModule = null;
 let currentInputManager = null;
 let detachTouchControls = null;
+let audioNeedsGesture = true;
 
 const mobileTouchEnabled = isMobileTouchBrowser();
 document.body.classList.toggle('mobile-controls-enabled', mobileTouchEnabled);
@@ -47,57 +49,26 @@ function getWasmEnvironmentError() {
     `(secure=${secure}, isolated=${isolated}, SharedArrayBuffer=${hasSharedMemory})`;
 }
 
-function updateAudioUi() {
-  if (!btnAudio) return;
-  if (!currentModule || typeof currentModule._PicoTracker_Wasm_GetAudioState !== 'function') {
-    btnAudio.textContent = 'Audio Init...';
-    btnAudio.disabled = true;
-    return;
-  }
-  const audioState = currentModule._PicoTracker_Wasm_GetAudioState();
-  // 0: Unavailable, 1: Locked, 2: Starting, 3: Running, 4: Suspended, 5: Failed, 6: Stopped
-  switch (audioState) {
-    case 1: // Locked
-      btnAudio.textContent = 'Enable Audio';
-      btnAudio.disabled = false;
-      btnAudio.className = 'btn';
-      break;
-    case 2: // Starting
-      btnAudio.textContent = 'Starting Audio...';
-      btnAudio.disabled = true;
-      btnAudio.className = 'btn';
-      break;
-    case 3: // Running
-      btnAudio.textContent = 'Audio Active';
-      btnAudio.disabled = false;
-      btnAudio.className = 'btn active';
-      break;
-    case 4: // Suspended
-      btnAudio.textContent = 'Resume Audio';
-      btnAudio.disabled = false;
-      btnAudio.className = 'btn';
-      break;
-    case 5: // Failed
-      const errPtr = currentModule._PicoTracker_Wasm_GetAudioError?.();
-      const err = errPtr ? currentModule.UTF8ToString(errPtr) : 'Audio error';
-      btnAudio.textContent = 'Audio Failed';
-      btnAudio.title = err;
-      btnAudio.disabled = true;
-      btnAudio.className = 'btn error';
-      break;
-    default:
-      btnAudio.textContent = 'Audio Unavailable';
-      btnAudio.disabled = true;
-      btnAudio.className = 'btn';
-      break;
-  }
+function getAudioState() {
+  return currentModule?._PicoTracker_Wasm_GetAudioState?.() ?? 0;
 }
 
 function unlockAudio() {
-  if (currentModule && typeof currentModule._PicoTracker_Wasm_UnlockAudio === 'function') {
-    currentModule._PicoTracker_Wasm_UnlockAudio();
+  if (!currentModule || typeof currentModule._PicoTracker_Wasm_UnlockAudio !== 'function') {
+    return false;
   }
-  updateAudioUi();
+  const state = getAudioState();
+  if (!audioNeedsGesture && state !== 1 && state !== 4) return state === 2 || state === 3;
+  const accepted = currentModule._PicoTracker_Wasm_UnlockAudio() !== 0;
+  if (accepted) audioNeedsGesture = false;
+  return accepted;
+}
+
+function setMenuOpen(open) {
+  if (!menuToggle || !menuPanel) return;
+  menuPanel.hidden = !open;
+  menuToggle.setAttribute('aria-expanded', String(open));
+  menuToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
 }
 
 async function shutdown() {
@@ -126,7 +97,6 @@ async function shutdown() {
     if (state === 4) { // Stopped
       updateStatus('Stopped', 'pending');
       window.__picoTrackerReady = false;
-      updateAudioUi();
       return true;
     }
     await new Promise((r) => setTimeout(r, 50));
@@ -401,26 +371,38 @@ if (btnLockRetry) {
   btnLockRetry.addEventListener('click', () => window.location.reload());
 }
 
+if (menuToggle && menuPanel) {
+  menuToggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setMenuOpen(menuPanel.hidden);
+  });
+  menuPanel.addEventListener('click', (event) => {
+    if (event.target.closest('button')) setMenuOpen(false);
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.app-menu')) setMenuOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !menuPanel.hidden) {
+      setMenuOpen(false);
+      menuToggle.focus();
+    }
+  });
+}
+
 if (btnStop) {
   btnStop.addEventListener('click', () => shutdown());
 }
 if (btnRestart) {
   btnRestart.addEventListener('click', () => restart());
 }
-if (btnAudio) {
-  btnAudio.addEventListener('click', () => unlockAudio());
-}
 if (canvas) {
   canvas.addEventListener('click', () => unlockAudio());
 }
-window.addEventListener('keydown', () => {
-  if (currentModule && typeof currentModule._PicoTracker_Wasm_GetAudioState === 'function') {
-    const s = currentModule._PicoTracker_Wasm_GetAudioState();
-    if (s === 1 || s === 4) {
-      unlockAudio();
-    }
-  }
-}, { passive: true });
+window.addEventListener('keydown', unlockAudio, { passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') audioNeedsGesture = true;
+});
 
 window.addEventListener('beforeunload', (event) => {
   if (storage.pendingGeneration > storage.syncedGeneration) {
@@ -428,8 +410,6 @@ window.addEventListener('beforeunload', (event) => {
     event.returnValue = '';
   }
 });
-
-setInterval(updateAudioUi, 250);
 
 window.__picoTrackerShutdown = shutdown;
 window.__picoTrackerRestart = restart;
@@ -508,7 +488,6 @@ async function boot() {
 
     currentModule = module;
     window.__picoTrackerModule = module;
-    updateAudioUi();
 
     // Wait for the application to mark ready (State == 1)
     const checkReady = () => {
@@ -527,19 +506,17 @@ async function boot() {
             detachTouchControls = attachTouchControls(
               mobileControls,
               currentInputManager,
-              { onFirstInteraction: unlockAudio }
+              { onInteraction: unlockAudio }
             );
           }
           window.__picoTrackerInput = currentInputManager;
 
           updateStatus('Ready - Advance tracker running', 'ready');
-          updateAudioUi();
           return;
         } else if (state === 3) { // Failed
           const errPtr = module._PicoTracker_Wasm_GetLastError?.();
           const errMsg = errPtr ? module.UTF8ToString(errPtr) : 'Unknown error';
           updateStatus(`Startup failed: ${errMsg}`, 'error');
-          updateAudioUi();
           return;
         }
       }

@@ -32,12 +32,76 @@
       align-items: center;
       min-height: 100vh;
     }
+    .page-header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 720px;
+      margin-bottom: 16px;
+    }
     h1 {
-      margin: 0 0 16px 0;
+      margin: 0;
       font-size: 20px;
       font-weight: 500;
       letter-spacing: 0.5px;
       color: #fff;
+    }
+    h1 a {
+      color: inherit;
+      text-decoration: none;
+    }
+    h1 a:hover,
+    h1 a:focus-visible {
+      color: #8be9fd;
+    }
+    .app-menu {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      z-index: 20;
+    }
+    .menu-toggle {
+      width: 38px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid #44475a;
+      border-radius: 4px;
+      background: #282a36;
+      color: #f8f8f2;
+      cursor: pointer;
+      font: 20px/1 inherit;
+    }
+    .menu-toggle:hover,
+    .menu-toggle:focus-visible {
+      background: #44475a;
+    }
+    .menu-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+      padding: 6px;
+      border: 1px solid #44475a;
+      border-radius: 5px;
+      background: #181a20;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    }
+    .menu-panel[hidden] {
+      display: none;
+    }
+    .menu-panel .btn {
+      width: 100%;
+      border-color: transparent;
+      background: transparent;
+      text-align: left;
+    }
+    .menu-panel .btn:hover,
+    .menu-panel .btn:focus-visible {
+      background: #44475a;
     }
     .canvas-container {
       position: relative;
@@ -334,13 +398,16 @@
       padding-bottom: max(16px, env(safe-area-inset-bottom));
       overscroll-behavior: none;
     }
-    .mobile-controls-enabled h1 {
+    .mobile-controls-enabled .page-header {
+      width: min(720px, calc(100vw - 24px));
       margin-bottom: 10px;
+    }
+    .mobile-controls-enabled #key-guide {
+      display: none;
     }
     .mobile-controls-enabled .canvas-container,
     .mobile-controls-enabled #picotracker-canvas,
-    .mobile-controls-enabled #toolbar,
-    .mobile-controls-enabled #key-guide {
+    .mobile-controls-enabled #toolbar {
       width: min(720px, calc(100vw - 24px));
     }
     .mobile-controls-enabled .canvas-container,
@@ -350,63 +417,71 @@
       height: min(720px, calc(100vw - 24px));
     }
     .mobile-controls-enabled #mobile-controls {
-      display: flex;
-      width: min(720px, calc(100vw - 24px));
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      width: min(560px, calc(100vw - 24px));
       margin-top: 18px;
-      align-items: center;
-      justify-content: space-around;
-      gap: 18px;
+      gap: clamp(7px, 2.5vw, 14px);
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
     }
-    .touch-dpad {
-      display: grid;
-      grid-template-columns: repeat(3, clamp(44px, 14vw, 72px));
-      grid-template-rows: repeat(3, clamp(44px, 14vw, 72px));
-      gap: 4px;
-    }
-    .touch-actions {
-      display: grid;
-      grid-template-columns: repeat(2, clamp(58px, 18vw, 92px));
-      gap: 10px;
-    }
     .touch-button {
+      width: 100%;
+      aspect-ratio: 1;
       min-width: 0;
-      min-height: 52px;
+      min-height: 0;
       margin: 0;
       padding: 0 8px;
-      border: 1px solid #555867;
-      border-radius: 9px;
+      border: 2px solid #555867;
+      border-radius: 8px;
       background: linear-gradient(#22242c, #16171d);
       box-shadow: inset 0 0 0 2px #0d0e12, 0 3px 6px rgba(0, 0, 0, 0.45);
       color: #f8f8f2;
-      font: 600 11px/1 inherit;
+      font: 600 clamp(10px, 3vw, 14px)/1 inherit;
       letter-spacing: 0.5px;
       text-transform: uppercase;
       -webkit-tap-highlight-color: transparent;
     }
-    .touch-dpad .touch-button {
-      width: 100%;
-      height: 100%;
-      border-radius: 12px;
-      font-size: 18px;
+    .touch-direction,
+    .touch-play {
+      font-size: clamp(19px, 6vw, 28px);
     }
     .touch-up {
       grid-column: 2;
+      grid-row: 1;
+    }
+    .touch-play {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    .touch-edit {
+      grid-column: 4;
       grid-row: 1;
     }
     .touch-left {
       grid-column: 1;
       grid-row: 2;
     }
+    .touch-down {
+      grid-column: 2;
+      grid-row: 2;
+    }
     .touch-right {
       grid-column: 3;
       grid-row: 2;
     }
-    .touch-down {
+    .touch-enter {
+      grid-column: 4;
+      grid-row: 2;
+    }
+    .touch-alt {
       grid-column: 2;
+      grid-row: 3;
+    }
+    .touch-nav {
+      grid-column: 3;
       grid-row: 3;
     }
     .touch-button.is-pressed {
@@ -424,52 +499,44 @@
         flex-direction: column;
         align-items: stretch;
       }
-      .mobile-controls-enabled .btn-group {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-      }
       .mobile-controls-enabled .btn {
         padding: 8px 4px;
         font-size: 11px;
-      }
-      .mobile-controls-enabled #key-guide {
-        display: none;
       }
     }
   </style>
 </head>
 <body>
-  <h1>picoTracker Advance</h1>
+  <header class="page-header">
+    <h1><a href="https://xiphonics.com/products/picotracker">picoTracker Advance</a></h1>
+    <div class="app-menu">
+      <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Open menu" aria-controls="menu-panel" aria-expanded="false">&#9776;</button>
+      <div id="menu-panel" class="menu-panel" role="menu" hidden>
+        <button id="btn-files" class="btn" type="button" role="menuitem">Files</button>
+        <button id="btn-stop" class="btn" type="button" role="menuitem">Stop</button>
+        <button id="btn-restart" class="btn" type="button" role="menuitem">Restart</button>
+      </div>
+    </div>
+  </header>
   <div class="canvas-container">
     <canvas id="picotracker-canvas" width="720" height="720"></canvas>
   </div>
   <div id="mobile-controls" aria-label="Tracker controls">
-    <div class="touch-dpad" aria-label="Direction controls">
-      <button type="button" class="touch-button touch-up" data-action="up" aria-label="Up">&#9650;</button>
-      <button type="button" class="touch-button touch-left" data-action="left" aria-label="Left">&#9664;</button>
-      <button type="button" class="touch-button touch-right" data-action="right" aria-label="Right">&#9654;</button>
-      <button type="button" class="touch-button touch-down" data-action="down" aria-label="Down">&#9660;</button>
-    </div>
-    <div class="touch-actions" aria-label="Action controls">
-      <button type="button" class="touch-button" data-action="edit">Edit</button>
-      <button type="button" class="touch-button" data-action="enter">Enter</button>
-      <button type="button" class="touch-button" data-action="play">Play</button>
-      <button type="button" class="touch-button" data-action="nav">Nav</button>
-      <button type="button" class="touch-button" data-action="alt">Alt</button>
-      <button type="button" class="touch-button" data-action="select">Select</button>
-    </div>
+    <button type="button" class="touch-button touch-direction touch-up" data-action="up" aria-label="Up">&#9650;</button>
+    <button type="button" class="touch-button touch-play" data-action="play" aria-label="Play">&#9655;</button>
+    <button type="button" class="touch-button touch-edit" data-action="edit">Edit</button>
+    <button type="button" class="touch-button touch-direction touch-left" data-action="left" aria-label="Left">&#9664;</button>
+    <button type="button" class="touch-button touch-direction touch-down" data-action="down" aria-label="Down">&#9660;</button>
+    <button type="button" class="touch-button touch-direction touch-right" data-action="right" aria-label="Right">&#9654;</button>
+    <button type="button" class="touch-button touch-enter" data-action="enter">Enter</button>
+    <button type="button" class="touch-button touch-alt" data-action="alt">Alt</button>
+    <button type="button" class="touch-button touch-nav" data-action="nav">Nav</button>
   </div>
   <div id="toolbar">
     <div id="status-bar">
       <div id="status-dot" class="status-dot"></div>
       <span id="status-text">Initializing web workbench...</span>
       <span id="storage-status" class="storage-tag">Saved</span>
-    </div>
-    <div class="btn-group">
-      <button id="btn-audio" class="btn">Enable Audio</button>
-      <button id="btn-files" class="btn">Files</button>
-      <button id="btn-stop" class="btn">Stop</button>
-      <button id="btn-restart" class="btn">Restart</button>
     </div>
   </div>
   <div id="key-guide">

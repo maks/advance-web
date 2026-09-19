@@ -71,7 +71,6 @@ export function attachTouchControls(root, inputManager, options = {}) {
 
   const buttons = [...root.querySelectorAll('[data-action]')];
   const activePointers = new Map();
-  let firstInteraction = true;
 
   function releasePointer(pointerId) {
     const active = activePointers.get(pointerId);
@@ -90,10 +89,6 @@ export function attachTouchControls(root, inputManager, options = {}) {
     if (!Object.hasOwn(ACTIONS, action)) return;
 
     event.preventDefault();
-    if (firstInteraction) {
-      firstInteraction = false;
-      options.onFirstInteraction?.();
-    }
     releasePointer(event.pointerId);
     const source = `touch:${event.pointerId}`;
     activePointers.set(event.pointerId, { action, button, source });
@@ -104,7 +99,11 @@ export function attachTouchControls(root, inputManager, options = {}) {
 
   function onPointerEnd(event) {
     event.preventDefault();
+    const action = activePointers.get(event.pointerId)?.action;
     releasePointer(event.pointerId);
+    if (event.type === 'pointerup' && action) {
+      options.onInteraction?.(action);
+    }
   }
 
   function preventContextMenu(event) {
